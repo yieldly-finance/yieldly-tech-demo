@@ -1,0 +1,643 @@
+#pragma version 4
+
+
+//** Begin
+//** Descrption: Checks if not first time created, if so then initialise all global variables
+//**/
+int 0
+txn ApplicationID
+==
+bz not_creation
+byte "C"
+txn Sender
+app_global_put
+
+byte "GT"
+global LatestTimestamp
+app_global_put
+byte "GA"
+int 0
+app_global_put
+byte "GSS"
+int 0
+app_global_put
+byte "TYUL"
+int 0
+app_global_put
+byte "TYL"
+int 0
+app_global_put
+
+int 1
+return
+
+
+//** Function: not_creation
+//** Descrption: If its not the first tme this application is being run, check for application deletion and remove from the creators account
+//**/
+not_creation:
+int DeleteApplication
+txn OnCompletion
+==
+bz not_deletion
+
+byte "C"
+app_global_get
+txn Sender
+==
+assert
+
+int 1
+return
+//**********************************************************
+
+
+
+//** Function: not_deletion
+//** Descrption: If not trying to update the application, check whether they are opting out/in or wanting to use a function
+//**/
+not_deletion:
+int UpdateApplication
+txn OnCompletion
+==
+bz not_update
+
+byte "C"
+app_global_get
+txn Sender
+==
+
+txn NumAppArgs
+int 1
+==
+&&
+assert
+
+byte "E"
+txna ApplicationArgs 0
+app_global_put
+
+int 1
+return
+//**********************************************************
+
+
+
+//** Function: not_update
+//** Descrption: If not trying to update the application, check whether they are opting out/in or wanting to use a function
+//**/
+not_update:
+int 0
+txn NumAppArgs
+==
+bz check_parms 
+
+int OptIn
+txn OnCompletion
+==
+assert
+
+int 0 
+byte "UT"
+byte "GT"
+app_global_get
+app_local_put
+
+int 1
+return
+
+//**********************************************************
+
+
+
+//** Function: check_parms
+//** Descrption: Checks the parameter of the txn (basically like checking for a function)
+//**/
+check_parms:
+// Staking
+txna ApplicationArgs 0
+byte "S"
+==
+bnz S
+
+// Withdraw
+txna ApplicationArgs 0
+byte "W" 
+==
+bnz W
+
+// Claim ASA Rewards
+txna ApplicationArgs 0
+byte "CA" 
+==
+bnz CA
+
+// Claim ASA Rewards
+txna ApplicationArgs 0
+byte "opt" 
+==
+bnz opt
+
+txna ApplicationArgs 0
+byte "LAT" 
+==
+bnz LAT
+
+txna ApplicationArgs 0
+byte "UAT" 
+==
+bnz UAT
+
+int 0 
+return
+//**********************************************************
+
+
+//** Function: S (Staking)
+//** Descrption: Allows the user to S their ASA tokens for ASA rewards
+//**/
+S:
+// ** GLOBAL ** 
+// Update the global staking shares
+byte "GA"
+app_global_get
+store 1
+
+// Usually we get the current timestamp minus the last one
+// global LatestTimestamp
+// byte "GT"
+// app_global_get
+// -
+
+// example 5 days
+int 432000
+
+// {Turn into days when testing is finished}
+int 86400 // from seconds to days
+/
+store 8
+
+load 8
+load 1
+*
+byte "GSS"
+app_global_get 
++
+store 2
+
+byte "GSS"
+load 2
+app_global_put
+
+// Update the amount
+byte "GA"
+app_global_get
+gtxn 1 AssetAmount
++
+store 3
+byte "GA"
+load 3
+app_global_put
+
+// Update the global time to now
+load 8
+int 1
+>=
+bz skipUpdateDGSS
+byte "GT"
+byte "GT"
+app_global_get
+load 8
+int 86400
+*
++
+app_global_put
+
+
+skipUpdateDGSS:
+
+// ** LOCAL **
+// Update the users staking shares
+
+int 0
+byte "UA"
+app_local_get
+store 1
+
+// global LatestTimestamp
+// int 0
+// byte "UT"
+// app_local_get
+// -
+int 432000
+int 86400 // from seconds to days
+/
+store 8
+
+load 8
+load 1
+*
+int 0
+byte "USS"
+app_local_get 
++
+store 2
+
+int 0 
+byte "USS"
+load 2
+app_local_put
+
+// Update the amount
+int 0 
+byte "UA"
+app_local_get
+gtxn 1 AssetAmount
++
+store 3
+int 0 
+byte "UA"
+load 3
+app_local_put
+
+// Update the global time to now (if 24 hrs have passed)
+load 8
+int 1
+>=
+bz skipUpdateDUSS
+
+int 0 
+byte "UT"
+int 0
+byte "UT"
+app_local_get
+load 8
+int 86400
+*
++
+app_local_put
+// ** LOCAL **
+
+skipUpdateDUSS:
+int 1
+return
+//**********************************************************
+
+//** Function: W (withdraw)
+//** Descrption: Allows the users to W their ASA tokens, their amounts are updated accordingly
+//**/
+W:
+// ** GLOBAL ** 
+// Update the global staking shares
+byte "GA"
+app_global_get
+store 1
+
+// global LatestTimestamp
+// byte "GT"
+// app_global_get
+// -
+
+int 432000
+
+// {Turn into days when testing is finished}
+int 86400 // from seconds to days
+/
+store 8
+
+load 8
+
+load 1
+*
+byte "GSS"
+app_global_get 
++
+store 2
+
+byte "GSS"
+load 2
+app_global_put
+
+// Update the amount
+byte "GA"
+app_global_get
+gtxn 1 AssetAmount
+-
+store 3
+byte "GA"
+load 3
+app_global_put
+
+// Update the global time to now
+load 8
+int 1
+>=
+bz SUWDGSS
+byte "GT"
+byte "GT"
+app_global_get
+load 8
+int 86400
+*
++
+//global LatestTimestamp
+app_global_put
+// ** GLOBAL ** 
+
+SUWDGSS:
+
+// ** LOCAL **
+// Update the users staking shares
+
+int 0
+byte "UA"
+app_local_get
+store 1
+
+// global LatestTimestamp
+// int 0
+// byte "UT"
+// app_local_get
+// -
+int 432000
+
+// {Turn into days when testing is finished}
+int 86400 // from seconds to days
+/
+store 8
+
+load 8
+
+load 1
+*
+int 0
+byte "USS"
+app_local_get 
++
+store 2
+
+
+int 0 
+byte "USS"
+load 2
+app_local_put
+
+// Update the amount
+int 0 
+byte "UA"
+app_local_get
+gtxn 1 AssetAmount
+-
+store 3
+int 0 
+byte "UA"
+load 3
+app_local_put
+
+// Update the global time to now
+load 8
+int 1
+>=
+bz SUWDUSS
+
+int 0 
+byte "UT"
+int 0
+byte "UT"
+app_local_get
+load 8
+int 86400
+*
++
+//global LatestTimestamp
+app_local_put
+// ** LOCAL **
+
+SUWDUSS:
+
+int 1
+return
+//**********************************************************
+
+// ***** THIS IS AN AXFER REQUEST **********
+//** Function: CA (claim ASA)
+//** Descrption: Allows user to claim earnt ASA
+//**/
+CA:
+// ** GLOBAL ** 
+// Update the global staking shares
+byte "GA"
+app_global_get
+store 1
+
+// global LatestTimestamp
+// byte "GT"
+// app_global_get
+// -
+
+int 432000
+
+// {Turn into days when testing is finished}
+int 86400 // from seconds to days
+/
+store 8
+
+load 8
+load 1
+*
+byte "GSS"
+app_global_get 
++
+store 2
+
+byte "GSS"
+load 2
+app_global_put
+
+// Update the global time to now
+load 8
+int 1
+>=
+bz skipUpdateCGSS
+byte "GT"
+byte "GT"
+app_global_get
+load 8
+int 86400
+*
++
+//global LatestTimestamp
+app_global_put
+// ** GLOBAL ** 
+
+skipUpdateCGSS:
+// ** GLOBAL ** 
+
+// // ** LOCAL **
+// Update the users staking shares
+int 0
+byte "UA"
+app_local_get
+store 1
+
+// global LatestTimestamp
+// int 0
+// byte "UT"
+// app_local_get
+// -
+int 432000
+
+// {Turn into days when testing is finished}
+int 86400 // from seconds to days
+/
+store 8
+
+load 8
+load 1
+
+*
+int 0
+byte "USS"
+app_local_get 
++
+store 2
+
+int 0 
+byte "USS"
+load 2
+app_local_put
+
+// Reward calculation 
+
+byte "TYUL"
+app_global_get
+byte "GSS"
+app_global_get 
+int 0
+byte "USS"
+app_local_get 
+/
+/
+store 4
+
+load 4
+gtxn 1 AssetAmount
+>=
+assert
+
+// Remove from the pool
+byte "TYUL"
+byte "TYUL"
+app_global_get
+gtxn 1 AssetAmount
+-
+app_global_put
+
+// Update global staking shares
+byte "GSS"
+byte "GSS"
+app_global_get 
+int 0 
+byte "USS"
+app_local_get
+-
+app_global_put
+
+// Set user staking shares to 0
+int 0 
+byte "USS"
+int 0
+app_local_put
+
+
+// Update the local time to now
+load 8
+int 1
+>=
+bz skipUpdateCUSS
+
+int 0 
+byte "UT"
+int 0
+byte "UT"
+app_local_get
+load 8
+int 86400
+*
++
+//global LatestTimestamp
+app_local_put
+// ** LOCAL **
+
+skipUpdateCUSS:
+int 1
+return
+//**********************************************************
+
+//** Function: LAT (Lock ASA tokens)
+//** Descrption: When ASA tokens are allocated to the escrow this tallys and tracks that amount
+//**/
+LAT:
+byte "C"
+app_global_get
+txn Sender
+==
+assert
+
+global GroupSize
+int 2
+==
+assert
+
+byte "TYL"
+gtxn 1 AssetAmount
+app_global_put
+
+int 1
+return
+//*************************************************
+
+//** Function: UAT (Unlock ASA tokens)
+//** Descrption: Unlocks ASA tokens to the claimable pool
+//**/
+UAT:
+byte "C"
+app_global_get
+txn Sender
+==
+assert
+
+byte "TYL"
+app_global_get
+
+// This rate is adjustable
+int 1
+/
+store 1
+
+byte "TYUL"
+byte "TYUL"
+app_global_get
+load 1
++
+app_global_put
+
+int 1
+return
+//*************************************************
+
+//** Function: opt
+//** Descrption: Use to opt the escrow into the asset
+//**/
+opt:
+int 1
+return
+
+//********************************//
+finished:
+int 1
+return
+
+failed:
+int 0
+return
